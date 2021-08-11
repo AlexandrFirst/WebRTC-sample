@@ -4,6 +4,92 @@ connection.onopen = () => {
     console.log("Connected to the server");
 }
 
+var recordButton = document.querySelector('#start-recording');
+var downloadButton = document.querySelector('#download-video');
+
+recordButton.addEventListener("click", function () {
+    if (recordButton.textContent === 'Start Recording') {
+        startRecording();
+    }
+    else {
+        stopRecording();
+        recordButton.textContent = 'Start Recording';
+        downloadButton.disabled = false;
+    }
+});
+
+downloadButton.addEventListener('click', () => {
+    const blob = new Blob(recordBlobs, {
+        type: 'video/webm'
+    });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.style.display = 'none';
+    a.href = url;
+
+    a.download = 'webrtc_record.webm';
+    document.body.appendChild(a);
+    a.click();
+
+    setTimeout(() => {
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+    }, 100);
+
+})
+
+function handleDataAvailable(event) {
+    if (event.data && event.data.size > 0) {
+        recordBlobs.push(event.data);
+    }
+}
+
+function startRecording() {
+    recordBlobs = [];
+    let options = {
+        mimeType: 'video/webm;codecs=vp9,opus'
+    }
+
+    if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+        //mimeType:'video/webm;codecs=vp8,opus';
+        console.error(`${options.mimeType} is not supported`);
+        options = {
+            mimeType: 'video/webm;codecs=vp8,opus'
+        }
+
+        if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+            console.error(`${options.mimeType} is not supported`);
+            options = {
+                mimeType: 'video/webm'
+            }
+        }
+
+        if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+            console.error(`${options.mimeType} is not supported`);
+            options = {
+                mimeType: ''
+            }
+        }
+    }
+
+    try {
+        mediaRecorder = new MediaRecorder(window.stream, options);
+    } catch (error) {
+        console.error('Media Recorder error: ', error);
+    }
+
+    mediaRecorder.start();
+
+    recordButton.textContent = 'Stop Recording';
+    downloadButton.disabled = true;
+
+    mediaRecorder.ondataavailable = handleDataAvailable;
+}
+
+function stopRecording() {
+    mediaRecorder.stop();
+}
+
 connection.onmessage = (msg) => {
     var data = JSON.parse(msg.data);
     switch (data.type) {
@@ -17,6 +103,7 @@ connection.onmessage = (msg) => {
             var call_reject = document.querySelector('.call-rejet');
 
             call_receive.addEventListener('click', function () {
+                recordButton.disabled = false;
                 acceptCall(data.name);
                 offerProcess(data.offer, data.name);
                 call_status.innerHTML = ' <div class="call-status-wrap white-text"> <div class="calling-wrap"> <div class="calling-hang-action"> <div class="videocam-on"> <i class="material-icons teal darken-2 white-text video-toggle">videocam</i> </div> <div class="audio-on"> <i class="material-icons teal darken-2 white-text audio-toggle">mic</i> </div> <div class="call-cancel"> <i class="call-cancel-icon material-icons red darken-3 white-text">call</i> </div> </div> </div> </div>'
@@ -336,6 +423,7 @@ function rejectProcess() {
 
 function acceptProcess() {
     call_status.innerHTML = ''
+    recordButton.disabled = false;
 }
 
 function hangup() {
